@@ -2,6 +2,10 @@ import Testing
 import SwiftUI
 @testable import Agent07UI
 
+// SwiftUI Views are implicitly @MainActor — reading their stored
+// properties from a test requires the test to run on the main actor too.
+// CI's stricter Swift 6 checking surfaces this; locally it slipped through.
+@MainActor
 struct UIComponentTests {
 
     // MARK: - CodeMinimap
