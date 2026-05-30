@@ -5,6 +5,7 @@ a small set of well-tested themed components, contextual onboarding bits
 (tooltips, tutorial overlays, help panel), and a couple of utility views
 for code rendering and diffs.
 
+[![CI](https://github.com/ArtemKyslicyn/Agent07UI/actions/workflows/ci.yml/badge.svg)](https://github.com/ArtemKyslicyn/Agent07UI/actions/workflows/ci.yml)
 [![Swift 6](https://img.shields.io/badge/Swift-6.0-orange.svg)](https://swift.org)
 [![Platforms](https://img.shields.io/badge/Platforms-macOS%2014%2B%20%7C%20iOS%2017%2B-blue.svg)](#)
 [![SPM](https://img.shields.io/badge/SwiftPM-compatible-brightgreen.svg)](#install)
