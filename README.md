@@ -15,6 +15,26 @@ for code rendering and diffs.
 
 ---
 
+## About
+
+**Agent07UI is the public design-system layer of the [Agent07](https://github.com/ArtemKyslicyn/Agent07)
+open-core architecture.** Agent07 is a macOS app (Swift 6 / SwiftUI)
+split into modular Swift Package Manager packages; this one holds the
+presentation primitives — the theme tokens, skins, reusable themed
+components, tooltips, and the tutorial overlay — that the app target and
+the other UI-facing packages all consume.
+
+It is intentionally the *bottom* of the UI stack:
+
+- **No package dependencies.** `Package.swift` declares zero
+  dependencies — not even sibling packages such as `Agent07Domain` or
+  `Agent07Foundation`. It links only the system frameworks (SwiftUI +
+  AppKit on macOS / UIKit on iOS). That keeps it a leaf node that
+  anything can depend on without pulling in domain logic.
+- **A single product**, `Agent07UI`, exporting one `Agent07UI` target.
+- **Drop-in outside Agent07 too.** Nothing here is Agent07-specific, so
+  it works as a standalone SwiftUI toolkit for any macOS 14+ / iOS 17+ app.
+
 ## Why
 
 Most SwiftUI apps end up reinventing the same primitives: a card with a
@@ -60,32 +80,66 @@ truth for every other component in the package — change a Theme value
 and everything re-skins.
 
 ```swift
-// Colors (auto-switched by Theme.mode = .light / .dark)
-Theme.accent          // brand accent
+// Surface colors (auto-switched by Theme.mode = .light / .dark)
 Theme.surface         // window background
-Theme.elevated        // raised surface (cards, sheets)
-Theme.border          // hairline borders
-Theme.borderActive    // focused/selected borders
-Theme.hover           // hover background
+Theme.primary         // base surface
+Theme.secondary       // slightly raised surface
 Theme.tertiary        // muted cards
+Theme.elevated        // raised surface (cards, sheets)
+Theme.hover           // hover background
+
+// Accent + semantic colors
+Theme.accent          // brand accent
+Theme.accentDim       // accent at 60% opacity
+Theme.success / .warning / .error / .info
+
+// Text colors
 Theme.textPrimary     // body text
 Theme.textSecondary   // de-emphasised text
 Theme.textTertiary    // captions
 Theme.textMuted       // disabled / placeholder
-Theme.success / .warning / .error / .info
+
+// Borders
+Theme.border          // hairline borders
+Theme.borderActive    // focused/selected borders (== accent)
 
 // Spacing scale (4-point grid)
-Theme.spacing4 / spacing8 / spacing12 / spacing16 / spacing20 / spacing24
+Theme.spacing4 / spacing8 / spacing12 / spacing16
 
 // Corner radii
 Theme.radius4 / radius8 / radius12
 
-// Type ramp
-Theme.tinyFont / captionFont / bodyFont / headerFont
+// Type ramp (Dynamic Type-backed, scales to AX5)
+Theme.titleFont / bodyFont / captionFont / tinyFont
+Theme.monoFont / monoSmall   // monospaced variants for code
+
+// Apply the package's appearance to the running app (macOS)
+Theme.applyAppearance()       // @MainActor
 
 // Light/dark switching (persisted via @AppStorage("themeMode"))
 @AppStorage("themeMode") var mode: ThemeMode = .dark
+Theme.isDark                  // resolved Bool for the current mode
 ```
+
+#### WCAG color-contrast verifier
+
+`Theme` ships a small, pure-Swift WCAG 2.1 contrast toolkit so you can
+assert (or unit-test) that any foreground/background pairing is legible.
+All functions return `nil` only when a `Color` can't be resolved to sRGB
+components on the current platform.
+
+```swift
+Theme.rgbComponents(from: color)                  // (red, green, blue)? in 0...1
+Theme.relativeLuminance(of: color)                // Double? per WCAG
+Theme.contrastRatio(between: fg, and: bg)          // Double? 1.0...21.0
+
+Theme.meetsAAText(foreground: fg, background: bg)       // ≥ 4.5:1 (normal text)
+Theme.meetsAALargeText(foreground: fg, background: bg)  // ≥ 3.0:1 (18pt+ / 14pt bold)
+Theme.meetsAAGraphics(foreground: fg, background: bg)   // ≥ 3.0:1 (UI components)
+```
+
+These are exactly the helpers the test suite uses to guard the built-in
+palette against contrast regressions in both light and dark modes.
 
 ### `ThemedCard` — content card with hover + selection states
 
@@ -261,28 +315,39 @@ visualizers on top.
 
 ### `CodeMinimap` — overview rail for long code views
 
+```swift
+CodeMinimap(content: sourceText,
+            currentLine: cursorLine,
+            language: "swift")
+```
+
 A vertical rail that scales code content down to a thumbnail, with
-sync-scrolled highlighting. Drops into any code editor as the right-
-edge rail.
+sync-scrolled highlighting of the `currentLine`. Drops into any code
+editor as the right-edge rail. `language` is used to tune the syntax
+tinting.
 
 ## Public API surface (cheat sheet)
 
 ```
 Theme + ThemeMode                        — design tokens, light/dark switch
+Theme.applyAppearance() / Theme.isDark   — apply skin, resolve current mode
+Theme contrast verifier                  — contrastRatio / meetsAAText /
+                                           meetsAALargeText / meetsAAGraphics /
+                                           relativeLuminance / rgbComponents
 Color(w:) / Color(hex:) / .hexString     — Color extensions
 ThemedCard                               — card surface
 ThemedSectionLabel                       — section header
 ThemedButton                             — compact button
 ThemedEmptyState                         — zero-state layout
 StatusBadge                              — execution status indicator
-ExecutionStatus (.idle/.running/etc.)
+ExecutionStatus (.idle/.running/.success/.error)
 LinearProgressBar                        — progress meter
 HelpItem + HelpCategory + HelpPanel      — searchable help reference
 ContextualTooltip + .contextualTooltip() — discoverability hints
 TooltipContainer / TooltipPlacement
 TutorialStep + DefaultTutorialStep
 TutorialOverlay                          — onboarding steps
-SplitDiffEditorView                      — side-by-side diff
+SplitDiffEditorView + DiffEditorLine     — side-by-side diff (+ LineType)
 CodeMinimap                              — code overview rail
 ```
 
@@ -292,10 +357,14 @@ CodeMinimap                              — code overview rail
 swift test
 ```
 
-142 tests across 21 suites, **57% line coverage**, all green. The suite
-covers:
+Written with the [Swift Testing](https://developer.apple.com/documentation/testing)
+framework (`@Suite` / `@Test`), not XCTest. 142 tests across 21 suites,
+**57% line coverage**, all green. The suite covers:
 
-- Light + dark theme contrast (WCAG AA: AAA where possible)
+- Light + dark theme contrast, asserted through the built-in WCAG
+  verifier (`Theme.contrastRatio` / `meetsAAText` / `meetsAALargeText` /
+  `meetsAAGraphics`) — AA minimum, AAA where possible
+- `relativeLuminance` / `rgbComponents` edge cases (incl. unresolvable colors)
 - Color helper round-trips (`hex` → `hexString` → back)
 - Every `ExecutionStatus` case rendering in `StatusBadge`
 - All themed component init paths (defaults + every optional)
